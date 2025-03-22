@@ -7,9 +7,9 @@ environment:
   sdk: ^3.7.2
 
 dependencies:
+  blockchain_utils: ^3.3.0
   crypto: ^3.0.3
-  bitcoin_flutter: ^2.0.0
-  # path: ^1.8.0
+  coinlib: ^3.0.1
 
 dev_dependencies:
   lints: ^5.0.0
