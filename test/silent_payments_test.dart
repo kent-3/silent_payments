@@ -1,9 +1,10 @@
 import 'dart:typed_data';
-import 'package:blockchain_utils/bip/ecc/keys/secp256k1_keys_ecdsa.dart';
+import 'package:coinlib/coinlib.dart';
 import 'package:test/test.dart';
 import 'package:silent_payments/silent_payments.dart';
 
-void main() {
+void main() async {
+  await loadCoinlib();
   group('SilentPaymentAddress', () {
     test('can parse a valid silent payment address', () {
       const address =
@@ -11,8 +12,8 @@ void main() {
       final spa = SilentPaymentAddress.fromAddress(address);
 
       expect(spa.version, 0);
-      expect(spa.B_scan.length, 33);
-      expect(spa.B_spend.length, 33);
+      expect(spa.B_scan.data.length, 33);
+      expect(spa.B_spend.data.length, 33);
     });
 
     test('toString returns same address', () {
@@ -33,8 +34,8 @@ void main() {
     test('throws on non-zero version', () {
       expect(
         () => SilentPaymentAddress(
-          B_scan: Secp256k1PublicKeyEcdsa.fromBytes(Uint8List(33)),
-          B_spend: Secp256k1PublicKeyEcdsa.fromBytes(Uint8List(33)),
+          B_scan: ECPublicKey(Uint8List(33)),
+          B_spend: ECPublicKey(Uint8List(33)),
           version: 1,
         ),
         throwsA(isA<Exception>()),

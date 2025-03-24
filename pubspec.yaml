@@ -7,7 +7,7 @@ environment:
   sdk: ^3.7.2
 
 dependencies:
-  blockchain_utils: ^3.3.0
+  blockchain_utils: ^4.2.0
   crypto: ^3.0.3
   coinlib: ^3.0.1
 
