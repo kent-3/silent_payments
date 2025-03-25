@@ -3,6 +3,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:coinlib/coinlib.dart';
+// import 'package:pointycastle/ecc/api.dart' show ECPoint;
+import 'package:pointycastle/ecc/curves/secp256k1.dart' show ECCurve_secp256k1;
 
 List<int> serUint32(int n) {
   final byteData = ByteData(4);
@@ -18,6 +20,51 @@ Uint8List taggedHash(List<int> data, String tag) {
   return sha256Hash(concat);
 }
 
+Uint8List tweakMul(Uint8List keyBytes, Uint8List tweakBytes) {
+  final n = ECCurve_secp256k1().n;
+
+  final keyInt = bigIntFromBytes(keyBytes);
+  final tweakInt = bigIntFromBytes(tweakBytes);
+
+  final result = (keyInt * tweakInt) % n;
+  return bigIntToBytes(result, length: 32);
+}
+
+BigInt bigIntFromBytes(Uint8List bytes, {Endian endian = Endian.big}) {
+  if (endian == Endian.little) {
+    bytes = Uint8List.fromList(bytes.reversed.toList());
+  }
+
+  BigInt result = BigInt.zero;
+  for (final byte in bytes) {
+    result = (result << 8) | BigInt.from(byte);
+  }
+  return result;
+}
+
+Uint8List bigIntToBytes(
+  BigInt val, {
+  required int length,
+  Endian order = Endian.big,
+}) {
+  if (val == BigInt.zero) {
+    return Uint8List(length);
+  }
+
+  final result = Uint8List(length);
+  final bigMask = BigInt.from(0xff);
+
+  for (int i = 0; i < length; i++) {
+    result[length - i - 1] = (val & bigMask).toInt();
+    val = val >> 8;
+  }
+
+  if (order == Endian.little) {
+    return Uint8List.fromList(result.reversed.toList());
+  }
+
+  return result;
+}
 
 // TODO: do we actually need any of this?
 
@@ -68,7 +115,6 @@ Uint8List taggedHash(List<int> data, String tag) {
 //   }
 //   return result;
 // }
-
 
 // class VinInfo {
 //   final OutPoint outpoint;
