@@ -1,6 +1,7 @@
 import 'dart:typed_data';
-import 'package:coinlib/coinlib.dart';
 import 'package:test/test.dart';
+import 'package:coinlib/coinlib.dart';
+
 import 'package:silent_payments/silent_payments.dart';
 
 void main() async {

@@ -3,7 +3,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:coinlib/coinlib.dart';
-// import 'package:pointycastle/ecc/api.dart' show ECPoint;
+import 'package:pointycastle/ecc/api.dart' show ECPoint;
+import 'package:pointycastle/ecc/ecc_fp.dart' show ECCurve;
 import 'package:pointycastle/ecc/curves/secp256k1.dart' show ECCurve_secp256k1;
 
 List<int> serUint32(int n) {
@@ -64,6 +65,29 @@ Uint8List bigIntToBytes(
   }
 
   return result;
+}
+
+ECPoint decodePoint(ECPublicKey pubkey) {
+  final curve = ECCurve_secp256k1().curve;
+  return curve.decodePoint(pubkey.data)!;
+}
+
+ECPublicKey addPubkeys(ECPublicKey a, ECPublicKey b) {
+  final p1 = decodePoint(a);
+  final p2 = decodePoint(b);
+  final sum = (p1 + p2)!;
+
+  return ECPublicKey(sum.getEncoded(true));
+}
+
+ECPublicKey negatePubkey(ECPublicKey key) {
+  final curve = ECCurve_secp256k1().curve as ECCurve;
+  final point = curve.decodePoint(key.data)!;
+
+  final negatedY = curve.q! - point.y!.toBigInteger()!; // TODO: does this work?
+  final negatedPoint = curve.createPoint(point.x!.toBigInteger()!, negatedY);
+
+  return ECPublicKey(negatedPoint.getEncoded(true));
 }
 
 // TODO: do we actually need any of this?
