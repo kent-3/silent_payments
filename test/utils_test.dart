@@ -7,6 +7,7 @@ import 'package:silent_payments/src/utils.dart';
 
 void main() async {
   await loadCoinlib();
+
   test('negatePubkey correctly negates a point on secp256k1', () {
     final secp256k1 = ECCurve_secp256k1();
     final G = secp256k1.G; // base point

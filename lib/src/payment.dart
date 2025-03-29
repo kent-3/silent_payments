@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:coinlib/coinlib.dart';
 import 'package:silent_payments/src/utils.dart';
 import 'package:silent_payments/src/address.dart';
+import 'package:pointycastle/ecc/api.dart' show ECPoint;
 
 class SilentPaymentOutput {
   final P2TRAddress address;
@@ -50,18 +51,37 @@ class SilentPaymentBuilder {
     }
   }
 
+  // void _getAsum() {
+  //   final head = pubkeys!.first;
+  //   final tail = pubkeys!.sublist(1);
+  //
+  //   A_sum = tail.fold<ECPublicKey>(
+  //     head,
+  //     (acc, item) =>
+  //         ECPublicKey((decodePoint(acc) + decodePoint(item))!.getEncoded()),
+  //   );
+  // }
+
   void _getAsum() {
     final head = pubkeys!.first;
     final tail = pubkeys!.sublist(1);
 
-    A_sum = tail.fold<ECPublicKey>(
-      head,
-      (acc, item) =>
-          ECPublicKey((decodePoint(acc) + decodePoint(item))!.getEncoded()),
+    final ECPoint sum = tail.fold<ECPoint>(
+      decodePoint(head),
+      (acc, item) => (acc + decodePoint(item))!,
     );
+
+    if (sum.isInfinity) {
+      A_sum = null;
+      return;
+    }
+
+    A_sum = ECPublicKey(sum.getEncoded());
   }
 
   void _getInputHash() {
+    if (A_sum == null) return; // graceful early exit
+
     final sorted =
         vinOutpoints.toList()
           ..sort((a, b) => compareBytes(a.toBytes(), b.toBytes()));
@@ -84,9 +104,18 @@ class SilentPaymentBuilder {
       var k = info.privkey;
       final isTaproot = info.isTaproot;
 
-      // TODO: double check this (but I'm pretty sure it's OK)
-      if (isTaproot && info.tweak) {
-        k = k.tweak(taggedHash(k.pubkey.x, "TapTweak"))!;
+      if (isTaproot) {
+        final pubkey = k.pubkey;
+        final isOdd =
+            decodePoint(pubkey).y!.toBigInteger()! % BigInt.two != BigInt.zero;
+
+        if (isOdd) {
+          k = negatePrivkey(k);
+        }
+
+        if (info.tweak) {
+          k = k.tweak(taggedHash(k.pubkey.x, "TapTweak"))!;
+        }
       }
 
       if (a_sum == null) {
@@ -96,8 +125,12 @@ class SilentPaymentBuilder {
       }
     }
 
-    A_sum = a_sum!.pubkey;
+    A_sum = a_sum?.pubkey;
     _getInputHash();
+
+    if (A_sum == null || inputHash == null) {
+      return {};
+    }
 
     Map<String, Map<String, List<SilentPaymentDestination>>>
     silentPaymentGroups = {};
@@ -105,6 +138,13 @@ class SilentPaymentBuilder {
     for (final silentPaymentDestination in silentPaymentDestinations) {
       final B_scan = silentPaymentDestination.B_scan;
       final scanPubkey = B_scan.hex;
+
+      final spendPubkey = silentPaymentDestination.B_spend.hex;
+
+      // print('A_sum: $A_sum');
+      print('B_scan: $scanPubkey');
+      print('B_m: $spendPubkey');
+      print('inputHash: ${bytesToHex(inputHash!)}');
 
       if (silentPaymentGroups.containsKey(scanPubkey)) {
         // Current key already in silentPaymentGroups, simply add up the new destination
@@ -117,13 +157,15 @@ class SilentPaymentBuilder {
           ecdhSharedSecret: [...recipients, silentPaymentDestination],
         };
       } else {
-        final senderPartialSecret = tweakMul(a_sum.data, inputHash!);
-        final ecdhSharedSecret = bytesToHex(
-          tweakMul(B_scan.data, senderPartialSecret),
-        );
+        final senderPartialSecret = tweakMulPrivate(a_sum!.data, inputHash!);
+        final ecdhSharedSecret = tweakMulPublic(B_scan, senderPartialSecret);
+
+        // print('senderPartialSecret: ${bytesToHex(senderPartialSecret)}');
+        print('ecdhSharedSecret: ${bytesToHex(ecdhSharedSecret)}');
+        print('destination: $silentPaymentDestination');
 
         silentPaymentGroups[scanPubkey] = {
-          ecdhSharedSecret: [silentPaymentDestination],
+          bytesToHex(ecdhSharedSecret): [silentPaymentDestination],
         };
       }
     }
@@ -138,7 +180,7 @@ class SilentPaymentBuilder {
         final kBytes = ByteData(4)..setUint32(0, k);
 
         final t_k = taggedHash([
-          ...ECPublicKey.fromHex(ecdhSharedSecret).data,
+          ...hexToBytes(ecdhSharedSecret),
           ...kBytes.buffer.asUint8List(),
         ], "BIP0352/SharedSecret");
 
@@ -173,9 +215,9 @@ class SilentPaymentBuilder {
     final tweakDataForRecipient =
         receiverTweak != null
             ? ECPublicKey.fromHex(receiverTweak!)
-            : ECPublicKey(tweakMul(A_sum!.data, inputHash!));
+            : ECPublicKey(tweakMulPublic(A_sum!, inputHash!));
     final ecdhSharedSecret = ECPublicKey(
-      tweakMul(tweakDataForRecipient.data, b_scan.data),
+      tweakMulPublic(tweakDataForRecipient, b_scan.data),
     );
 
     final matches = <String, SilentPaymentScanningOutput>{};
