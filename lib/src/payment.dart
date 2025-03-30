@@ -139,12 +139,10 @@ class SilentPaymentBuilder {
       final B_scan = silentPaymentDestination.B_scan;
       final scanPubkey = B_scan.hex;
 
-      final spendPubkey = silentPaymentDestination.B_spend.hex;
-
       // print('A_sum: $A_sum');
-      print('B_scan: $scanPubkey');
-      print('B_m: $spendPubkey');
-      print('inputHash: ${bytesToHex(inputHash!)}');
+      // print('B_scan: $scanPubkey');
+      // print('B_m: ${silentPaymentDestination.B_spend.hex}');
+      // print('inputHash: ${bytesToHex(inputHash!)}');
 
       if (silentPaymentGroups.containsKey(scanPubkey)) {
         // Current key already in silentPaymentGroups, simply add up the new destination
@@ -160,9 +158,8 @@ class SilentPaymentBuilder {
         final senderPartialSecret = tweakMulPrivate(a_sum!.data, inputHash!);
         final ecdhSharedSecret = tweakMulPublic(B_scan, senderPartialSecret);
 
-        // print('senderPartialSecret: ${bytesToHex(senderPartialSecret)}');
-        print('ecdhSharedSecret: ${bytesToHex(ecdhSharedSecret)}');
-        print('destination: $silentPaymentDestination');
+        // print('ecdhSharedSecret: ${bytesToHex(ecdhSharedSecret)}');
+        // print('destination: $silentPaymentDestination');
 
         silentPaymentGroups[scanPubkey] = {
           bytesToHex(ecdhSharedSecret): [silentPaymentDestination],
@@ -212,6 +209,11 @@ class SilentPaymentBuilder {
     List<Output> outputsToCheck, {
     Map<String, String>? precomputedLabels,
   }) {
+    // TODO: is this the best place to handle this case?
+    if (A_sum == null || inputHash == null) {
+      return {};
+    }
+
     final tweakDataForRecipient =
         receiverTweak != null
             ? ECPublicKey.fromHex(receiverTweak!)
@@ -235,11 +237,12 @@ class SilentPaymentBuilder {
       final length = outputsToCheck.length;
 
       for (var i = 0; i < length; i++) {
-        final output = outputsToCheck[i].scriptPubKey.sublist(2);
+        final output = outputsToCheck[i].scriptPubKey;
         final outputPubkey = bytesToHex(output);
         final outputAmount = outputsToCheck[i].value.toInt();
 
-        if (bytesEqual(output, P_k!.data.sublist(1))) {
+        // NOTE: remove the key parity for byte comparison
+        if (bytesEqual(output.sublist(1), P_k!.data.sublist(1))) {
           matches[outputPubkey] = SilentPaymentScanningOutput(
             output: SilentPaymentOutput(
               P2TRAddress.fromTweakedKey(P_k, hrp: 'bc'),
@@ -257,11 +260,13 @@ class SilentPaymentBuilder {
           var m_G = precomputedLabels[m_G_sub.hex];
 
           if (m_G == null) {
-            m_G_sub =
-                m_G_sub = addPubkeys(
-                  negatePubkey(ECPublicKey(output)),
-                  negatePubkey(P_k),
-                );
+            print('output pubkey: ${ECPublicKey(output).hex}');
+            print('P_k pubkey:    ${P_k.hex}');
+
+            m_G_sub = addPubkeys(
+              negatePubkey(ECPublicKey(output)),
+              negatePubkey(P_k),
+            );
             m_G = precomputedLabels[m_G_sub.hex];
           }
 
@@ -295,7 +300,7 @@ class SilentPaymentBuilder {
   }
 }
 
-// TODO: is this necessary?
+// TODO:
 // BitcoinScriptOutput getScriptFromOutput(String pubkey, int amount) {
 //   return BitcoinScriptOutput(
 //     script: Script(script: [BitcoinOpCodeConst.OP_1, pubkey]),
