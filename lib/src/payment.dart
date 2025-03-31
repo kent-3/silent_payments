@@ -25,17 +25,42 @@ class SilentPaymentScanningOutput {
   });
 }
 
+// TODO: Remove this abstraction?
 class ECPrivateInfo {
   final ECPrivateKey privkey;
   final bool isTaproot;
+
+  /// If `tweak` is true, this key is assumed to be an internal Taproot key.
+  /// It will be tweaked using taggedHash(pubkey_x, "TapTweak") before use.
+  /// Otherwise, it is assumed to be already tweaked and ready to use.
   final bool tweak;
 
   ECPrivateInfo(this.privkey, this.isTaproot, {this.tweak = false});
 }
 
+/*
+  Silent Payment Notation (from BIP-352):
+
+  - A_sum: Sum of the sender's public keys. Used to derive the shared secret with each recipient.
+  - a_sum: Aggregated sender private key. Used to compute the partial secret a_sum * inputHash.
+  - B_scan: Recipient’s scan public key. Used in ECDH to derive a shared secret.
+  - B_spend: Recipient’s spend public key. Used to compute the final output address.
+  - t_k: A per-output tweak derived from the shared secret and index k. Ensures each output address is unique.
+  - P_k: The final (tweaked) output public key for recipient output index k. Encoded as a P2TR address.
+
+  The shared secret is computed as:
+      ecdhSharedSecret = A_sum * b_scan
+
+  Then each unique output is derived with:
+      P_k = B_spend + t_k * G
+  where:
+      t_k = taggedHash(ecdhSharedSecret || k, "BIP0352/SharedSecret")
+*/
+
 class SilentPaymentBuilder {
   final List<OutPoint> vinOutpoints;
   final List<ECPublicKey>? pubkeys;
+  final String hrp;
   ECPublicKey? A_sum;
   Uint8List? inputHash;
   String? receiverTweak;
@@ -44,23 +69,18 @@ class SilentPaymentBuilder {
     required this.vinOutpoints,
     this.pubkeys,
     this.receiverTweak,
+    this.hrp = 'bc',
   }) {
+    assert(
+      receiverTweak != null || pubkeys != null,
+      'Must provide either receiverTweak or pubkeys to derive inputHash.',
+    );
+
     if (receiverTweak == null && pubkeys != null) {
       _getAsum();
       _getInputHash();
     }
   }
-
-  // void _getAsum() {
-  //   final head = pubkeys!.first;
-  //   final tail = pubkeys!.sublist(1);
-  //
-  //   A_sum = tail.fold<ECPublicKey>(
-  //     head,
-  //     (acc, item) =>
-  //         ECPublicKey((decodePoint(acc) + decodePoint(item))!.getEncoded()),
-  //   );
-  // }
 
   void _getAsum() {
     final head = pubkeys!.first;
