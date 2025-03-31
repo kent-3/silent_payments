@@ -222,10 +222,12 @@ class SilentPaymentBuilder {
       tweakMulPublic(tweakDataForRecipient, b_scan.data),
     );
 
+    // print("ecdhSharedSecret: ${ecdhSharedSecret.hex}");
+
     final matches = <String, SilentPaymentScanningOutput>{};
     var k = 0;
 
-    do {
+    while (true) {
       final kBytes = ByteData(4)..setUint32(0, k);
 
       final t_k = taggedHash([
@@ -236,12 +238,13 @@ class SilentPaymentBuilder {
       final P_k = B_spend.tweak(t_k);
       final length = outputsToCheck.length;
 
+      bool foundMatch = false;
+
       for (var i = 0; i < length; i++) {
         final output = outputsToCheck[i].scriptPubKey;
         final outputPubkey = bytesToHex(output);
         final outputAmount = outputsToCheck[i].value.toInt();
 
-        // NOTE: remove the key parity for byte comparison
         if (bytesEqual(output.sublist(1), P_k!.data.sublist(1))) {
           matches[outputPubkey] = SilentPaymentScanningOutput(
             output: SilentPaymentOutput(
@@ -252,6 +255,7 @@ class SilentPaymentBuilder {
           );
           outputsToCheck.removeAt(i);
           k++;
+          foundMatch = true;
           break;
         }
 
@@ -260,9 +264,6 @@ class SilentPaymentBuilder {
           var m_G = precomputedLabels[m_G_sub.hex];
 
           if (m_G == null) {
-            print('output pubkey: ${ECPublicKey(output).hex}');
-            print('P_k pubkey:    ${P_k.hex}');
-
             m_G_sub = addPubkeys(
               negatePubkey(ECPublicKey(output)),
               negatePubkey(P_k),
@@ -284,26 +285,15 @@ class SilentPaymentBuilder {
 
             outputsToCheck.removeAt(i);
             k++;
+            foundMatch = true;
             break;
           }
         }
-
-        outputsToCheck.removeAt(i);
-
-        if (i + 1 >= outputsToCheck.length) {
-          break;
-        }
       }
-    } while (outputsToCheck.isNotEmpty);
+
+      if (!foundMatch) break;
+    }
 
     return matches;
   }
 }
-
-// TODO:
-// BitcoinScriptOutput getScriptFromOutput(String pubkey, int amount) {
-//   return BitcoinScriptOutput(
-//     script: Script(script: [BitcoinOpCodeConst.OP_1, pubkey]),
-//     value: BigInt.from(amount),
-//   );
-// }

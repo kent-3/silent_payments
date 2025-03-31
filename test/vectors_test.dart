@@ -7,7 +7,10 @@ import 'package:crypto/crypto.dart';
 import 'package:coinlib/coinlib.dart';
 import 'package:pointycastle/ecc/curves/secp256k1.dart';
 import 'package:test/test.dart';
-import 'package:coinlib/src/secp256k1/secp256k1.dart';
+// import 'package:coinlib/src/secp256k1/secp256k1.dart';
+
+import 'package:convert/convert.dart';
+import 'package:elliptic/elliptic.dart';
 
 import 'package:silent_payments/silent_payments.dart';
 
@@ -20,7 +23,7 @@ void main() async {
 
   for (final vector in testVectors) {
     test(vector['comment'], () {
-      print('\x1B[36mSending:\x1B[0m');
+      // print('\x1B[36mSending:\x1B[0m');
 
       for (final sendingTest in vector['sending']) {
         final given = sendingTest["given"];
@@ -70,7 +73,7 @@ void main() async {
 
         for (final vin in vins) {
           final pubkey = getPubKeyFromInput(vin);
-          print("pubkey from input: ${pubkey?.hex}");
+          // print("pubkey from input: ${pubkey?.hex}");
           if (pubkey == null) continue;
 
           inputPrivKeys.add((vin.privkey, isP2TR(vin.prevOutScript.compiled)));
@@ -120,8 +123,8 @@ void main() async {
               final expectedSet = Set<String>.from(List<String>.from(lst));
               final actualSet = Set<String>.from(sendingOutputs);
 
-              print("Expected: $expectedSet");
-              print("Actual:   $actualSet");
+              // print("Expected: $expectedSet");
+              // print("Actual:   $actualSet");
 
               return expectedSet.length == actualSet.length &&
                   expectedSet.containsAll(
@@ -141,7 +144,7 @@ void main() async {
         }
       }
 
-      print('\x1B[36mReceiving:\x1B[0m');
+      // print('\x1B[36mReceiving:\x1B[0m');
 
       // Test receiving
       final msg = sha256.convert(utf8.encode("message")).bytes;
@@ -169,7 +172,7 @@ void main() async {
                 .whereType<ECPublicKey>()
                 .toList();
 
-        print('outputsToCheck: ${outputsToCheck.map((pubkey) => pubkey.hex)}');
+        // print('outputsToCheck: ${outputsToCheck.map((pubkey) => pubkey.hex)}');
 
         // not storing the List<VinInfo> this time
         for (final input in given["vin"]) {
@@ -199,7 +202,7 @@ void main() async {
           vinOutpoints.add(vin.outpoint);
 
           final pubkey = getPubKeyFromInput(vin);
-          print("pubkey from input: ${pubkey?.hex}");
+          // print("pubkey from input: ${pubkey?.hex}");
           if (pubkey == null) continue;
           inputPubKeys.add(pubkey);
         }
@@ -233,6 +236,7 @@ void main() async {
             tweakMulPublic(G, generatedLabel),
           )] = bytesToHex(generatedLabel);
         }
+        // print('preComputedLabels: $preComputedLabels');
 
         for (var address in expected['addresses']) {
           expect(
@@ -248,8 +252,6 @@ void main() async {
           receivingAddresses.toString() == expected['addresses'].toString(),
           "Receiving addresses don't match",
         );
-
-        final addToWallet = [];
 
         if (inputPubKeys.isNotEmpty) {
           final spb = SilentPaymentBuilder(
@@ -267,76 +269,172 @@ void main() async {
           );
 
           final expectedDestinations = expected['outputs'];
+          final normalizedOutputs = <String>{};
+
+          // print('Expected number of outputs: ${expectedDestinations.length}');
+          // print('Actual number of outputs:   ${addToWallet.length}');
 
           // Check that the private key is correct for the found output public key
           for (int i = 0; i < expectedDestinations.length; i++) {
-            final output = addToWallet.entries.elementAt(i);
+            // print('i=$i');
+
+            final output = addToWallet.entries.elementAt(
+              expectedDestinations.length - 1 - i,
+            );
             final pubkey = output.key;
-            final expectedPubkey = expectedDestinations[i]["pub_key"];
-            expect(pubkey.substring(2), expectedPubkey);
+            // final expectedPubkey = expectedDestinations[i]["pub_key"];
+            // expect(pubkey.substring(2), expectedPubkey);
 
             final privKeyTweak = output.value.tweak;
-            final expectedPrivKeyTweak =
-                expectedDestinations[i]["priv_key_tweak"];
-            expect(privKeyTweak, expectedPrivKeyTweak);
+            // final expectedPrivKeyTweak =
+            //     expectedDestinations[i]["priv_key_tweak"];
+            // expect(privKeyTweak, expectedPrivKeyTweak);
 
             var fullPrivateKey =
                 silentPaymentOwner.b_spend
-                    .tweak(hexToBytes(privKeyTweak))
-                    ?.xonly;
+                    .tweak(hexToBytes(privKeyTweak))!
+                    .xonly;
 
             // TODO: I think '.xonly' handles this
             // if (!fullPrivateKey!.pubkey.yIsEven) {
             //   fullPrivateKey = negatePrivkey(fullPrivateKey);
             // }
 
+            // final hash = bytesToHex(Uint8List.fromList(msg));
+            // final privKey = bytesToHex(Uint8List.fromList(fullPrivateKey.data));
+            // final extraEntropy = bytesToHex(Uint8List.fromList(aux));
+
+            // print('msg    (${msg.length}): $hash');
+            // print('priv   (${fullPrivateKey.data.length}): $privKey');
+            // print('aux    (${aux.length}): $extraEntropy');
+
             // Sign the message with schnorr
-            final signature = secp256k1.schnorrSign(
+            final signature = signSchnorr(
               Uint8List.fromList(msg),
-              fullPrivateKey!.data,
+              fullPrivateKey.data,
               Uint8List.fromList(aux),
             );
 
+            // print('signature: ${bytesToHex(Uint8List.fromList(signature))}');
+
             // Verify the message is correct
-            expect(
-              secp256k1.schnorrVerify(
-                signature,
-                Uint8List.fromList(msg),
-                ECPublicKey.fromHex(pubkey).x,
-              ),
-              true,
+            // expect(
+            //   secp256k1.schnorrVerify(
+            //     signature,
+            //     Uint8List.fromList(msg),
+            //     ECPublicKey.fromHex(pubkey).x,
+            //   ),
+            //   true,
+            // );
+
+            // ✅ Build normalized map for comparison
+            final outputMap = {
+              "pub_key": ECPublicKey.fromHex(pubkey).xhex,
+              "priv_key_tweak": privKeyTweak,
+              "signature": bytesToHex(Uint8List.fromList(signature)),
+            };
+
+            // ✅ Sort keys for consistent string representation
+            final sortedMap = Map.fromEntries(
+              outputMap.entries.toList()
+                ..sort((a, b) => a.key.compareTo(b.key)),
             );
 
-            // Verify the signature is correct
-            expect(
-              bytesToHex(Uint8List.fromList(signature)),
-              expectedDestinations[i]["signature"],
-            );
-
-            i++;
+            normalizedOutputs.add(json.encode(sortedMap));
           }
-        }
 
-        // if (len(input_pub_keys) > 0):
-        //     A_sum = reduce(lambda x, y: x + y, input_pub_keys)
-        //     if A_sum.get_bytes() is None:
-        //         # Input pubkeys sum is point at infinity -> skip tx
-        //         assert expected["outputs"] == []
-        //         continue
-        //     input_hash = get_input_hash([vin.outpoint for vin in vins], A_sum)
-        //     pre_computed_labels = {
-        //         (generate_label(b_scan, label) * G).get_bytes(False).hex(): generate_label(b_scan, label).hex()
-        //         for label in given["labels"]
-        //     }
-        //     add_to_wallet = scanning(
-        //         b_scan=b_scan,
-        //         B_spend=B_spend,
-        //         A_sum=A_sum,
-        //         input_hash=input_hash,
-        //         outputs_to_check=outputs_to_check,
-        //         labels=pre_computed_labels,
-        //     )
+          final expectedList = List<Map<String, dynamic>>.from(
+            expected["outputs"],
+          );
+          final expectedSet =
+              expectedList.map((m) {
+                final sorted = Map.fromEntries(
+                  m.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+                );
+                return json.encode(sorted);
+              }).toSet();
+
+          expect(normalizedOutputs, expectedSet);
+        }
       }
     });
   }
+}
+
+// NOTE: Code below is to match the implementation of Schnorr signatures used by the
+// [python reference](https://github.com/bitcoin/bips/blob/master/bip-0352/reference.py)
+
+final curve = getSecp256k1();
+final n = curve.n;
+final G = curve.G;
+
+Uint8List taggedHash(String tag, List<int> msg) {
+  final tagHash = sha256.convert(utf8.encode(tag)).bytes;
+  final h = sha256.convert([...tagHash, ...tagHash, ...msg]);
+  return Uint8List.fromList(h.bytes);
+}
+
+/// Produces a Schnorr signature per BIP-340, matching the test Python implementation.
+Uint8List signSchnorr(
+  Uint8List msg, // 32-byte message
+  Uint8List privKeyBytes, // 32-byte scalar
+  Uint8List auxRand, // 32-byte aux
+) {
+  assert(msg.length == 32);
+  assert(auxRand.length == 32);
+  final privKey = BigInt.parse(hex.encode(privKeyBytes), radix: 16);
+
+  // Step 1: t = privKey XOR TaggedHash("BIP0340/aux", auxRand)
+  final auxHash = taggedHash("BIP0340/aux", auxRand);
+  final t = privKey ^ BigInt.parse(hex.encode(auxHash), radix: 16);
+
+  // Step 2: nonce = TaggedHash("BIP0340/nonce", t || pubkey || msg)
+  final privateKey = PrivateKey(curve, privKey);
+  final pubkey = privateKey.publicKey;
+  final pubkeyBytes = pubkey.X.toRadixString(16).padLeft(64, '0');
+
+  Uint8List bigIntTo32Bytes(BigInt value) {
+    final bytes = value.toUnsigned(256).toRadixString(16).padLeft(64, '0');
+    return Uint8List.fromList(hex.decode(bytes));
+  }
+
+  final nonceInput = <int>[
+    ...bigIntTo32Bytes(t),
+    ...hex.decode(pubkeyBytes),
+    ...msg,
+  ];
+  final nonceBytes = taggedHash("BIP0340/nonce", nonceInput);
+  BigInt k = BigInt.parse(hex.encode(nonceBytes), radix: 16) % n;
+  if (k == BigInt.zero) {
+    throw Exception("Nonce k == 0");
+  }
+
+  // Step 3: Compute R = k*G and ensure Y is even
+  var kKey = PrivateKey(curve, k);
+  var R = kKey.publicKey;
+
+  if (!R.Y.isEven) {
+    k = n - k;
+    kKey = PrivateKey(curve, k);
+    R = kKey.publicKey;
+  }
+
+  final rBytes = R.X.toRadixString(16).padLeft(64, '0');
+  final rBytesList = hex.decode(rBytes);
+
+  // Step 4: Compute e = TaggedHash("BIP0340/challenge", r || pubkey || msg)
+  final eBytes = taggedHash("BIP0340/challenge", [
+    ...rBytesList,
+    ...hex.decode(pubkeyBytes),
+    ...msg,
+  ]);
+  final e = BigInt.parse(hex.encode(eBytes), radix: 16) % n;
+
+  // Step 5: s = (k + e * privKey) % n
+  final s = (k + e * privKey) % n;
+  final sBytes = s.toRadixString(16).padLeft(64, '0');
+  final sBytesList = hex.decode(sBytes);
+
+  // Final signature = r || s
+  return Uint8List.fromList([...rBytesList, ...sBytesList]);
 }
