@@ -1,7 +1,7 @@
 name: silent_payments
-description: A starting point for Dart libraries or applications.
-version: 1.0.0
-# repository: https://github.com/my_org/my_repo
+description: A pure Dart library for working with Bitcoin Silent Payments.
+version: 0.1.0
+repository: https://github.com/kent-3/silent_payments
 
 environment:
   sdk: ^3.7.2
