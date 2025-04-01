@@ -9,6 +9,7 @@ import 'package:pointycastle/ecc/curves/secp256k1.dart';
 import 'package:test/test.dart';
 
 import 'package:silent_payments/silent_payments.dart';
+import 'package:silent_payments/src/utils.dart';
 import 'test_utils.dart';
 
 void main() async {
