@@ -24,7 +24,15 @@ jobs:
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed .
 
+      - name: Cache libsecp256k1
+        id: cache-libsecp
+        uses: actions/cache@v3
+        with:
+          path: build/libsecp256k1.so
+          key: ${{ runner.os }}-libsecp256k1-${{ hashFiles('pubspec.lock') }}
+
       - name: Build libsecp256k1 with coinlib
+        if: steps.cache-libsecp.outputs.cache-hit != 'true'
         run: dart run coinlib:build_linux
 
       - name: Analyze project source
