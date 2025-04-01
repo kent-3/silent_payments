@@ -40,31 +40,39 @@ void _testSending(Map<String, dynamic> vector) {
 
     // Skip test if no input public keys are available
     if (inputPubKeys.isEmpty) {
-      expect(expected['outputs'][0], isEmpty, 
-          reason: 'Expected output set should be empty');
+      expect(
+        expected['outputs'][0],
+        isEmpty,
+        reason: 'Expected output set should be empty',
+      );
       continue;
     }
 
     // Prepare destination addresses
-    final destinations = List<String>.from(given['recipients'])
-        .map((recipient) => SilentPaymentDestination.fromAddress(recipient, 0))
-        .toList();
+    final destinations =
+        List<String>.from(given['recipients'])
+            .map(
+              (recipient) => SilentPaymentDestination.fromAddress(recipient, 0),
+            )
+            .toList();
 
     // Create outputs using the SilentPaymentBuilder
     final outpoints = vins.map((vin) => vin.outpoint).toList();
-    final inputPrivateInfos = inputPrivKeys
-        .map((privkey) => ECPrivateInfo(privkey.$1!, privkey.$2))
-        .toList();
+    final inputPrivateInfos =
+        inputPrivKeys
+            .map((privkey) => ECPrivateInfo(privkey.$1!, privkey.$2))
+            .toList();
 
     final builder = SilentPaymentBuilder(
       outpoints: outpoints,
       publicKeys: inputPubKeys,
     );
-    
+
     final outputMap = builder.createOutputs(inputPrivateInfos, destinations);
-    final sendingOutputs = outputMap.values
-        .expand((outputs) => outputs.map((o) => bytesToHex(o.address.data)))
-        .toList();
+    final sendingOutputs =
+        outputMap.values
+            .expand((outputs) => outputs.map((o) => bytesToHex(o.address.data)))
+            .toList();
 
     // Verify outputs against expected values
     // Note: The order doesn't matter for creating/finding outputs. Different orderings of recipient addresses
@@ -96,24 +104,26 @@ void _testReceiving(Map<String, dynamic> vector) {
     // Prepare input information
     final vinInfo = _prepareVinInfoFromInputs(given["vin"]);
     final vinOutpoints = vinInfo.map((vin) => vin.outpoint).toList();
-    
+
     // Extract public keys from inputs
-    final inputPubKeys = vinInfo
-        .map((vin) => getPubKeyFromInput(vin))
-        .whereType<ECPublicKey>()
-        .toList();
+    final inputPubKeys =
+        vinInfo
+            .map((vin) => getPubKeyFromInput(vin))
+            .whereType<ECPublicKey>()
+            .toList();
 
     // Parse outputs to check
-    final outputsToCheck = List<String>.from(given['outputs'])
-        .map((p) {
-          try {
-            return ECPublicKey.fromXOnlyHex(p);
-          } catch (_) {
-            return null;
-          }
-        })
-        .whereType<ECPublicKey>()
-        .toList();
+    final outputsToCheck =
+        List<String>.from(given['outputs'])
+            .map((p) {
+              try {
+                return ECPublicKey.fromXOnlyHex(p);
+              } catch (_) {
+                return null;
+              }
+            })
+            .whereType<ECPublicKey>()
+            .toList();
 
     // Create SilentPaymentOwner from key material
     final silentPaymentOwner = SilentPaymentOwner.fromPrivateKeys(
@@ -126,7 +136,7 @@ void _testReceiving(Map<String, dynamic> vector) {
       silentPaymentOwner,
       given['labels'],
     );
-    
+
     final receivingAddresses = receivingAddressData.addresses;
     final preComputedLabels = receivingAddressData.labelMap;
 
@@ -169,12 +179,11 @@ void _testReceiving(Map<String, dynamic> vector) {
       final output = addToWallet.entries.elementAt(
         expectedDestinations.length - 1 - i,
       );
-      
+
       final pubkey = output.key;
       final privKeyTweak = output.value.tweak;
-      final fullPrivateKey = silentPaymentOwner.b_spend
-          .tweak(hexToBytes(privKeyTweak))!
-          .xonly;
+      final fullPrivateKey =
+          silentPaymentOwner.b_spend.tweak(hexToBytes(privKeyTweak))!.xonly;
 
       // Sign the message with Schnorr
       final signature = signSchnorr(
@@ -200,15 +209,20 @@ void _testReceiving(Map<String, dynamic> vector) {
 
     // Normalize expected outputs for comparison
     final expectedList = List<Map<String, dynamic>>.from(expected["outputs"]);
-    final expectedSet = expectedList.map((m) {
-      final sorted = Map.fromEntries(
-        m.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
-      );
-      return json.encode(sorted);
-    }).toSet();
+    final expectedSet =
+        expectedList.map((m) {
+          final sorted = Map.fromEntries(
+            m.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+          );
+          return json.encode(sorted);
+        }).toSet();
 
     // Verify normalized outputs match expected
-    expect(normalizedOutputs, expectedSet, reason: "Output signatures don't match expected");
+    expect(
+      normalizedOutputs,
+      expectedSet,
+      reason: "Output signatures don't match expected",
+    );
   }
 }
 
@@ -223,24 +237,26 @@ List<VinInfo> _prepareVinInfoFromInputs(List<dynamic> inputs) {
         scriptSig: hexToBytes(input['scriptSig']),
         txinwitness: WitnessInput(
           prevOut: OutPoint.fromHex(input['txid'], input['vout']),
-          witness: deserStringVector(
-            ByteData.sublistView(hexToBytes(input['txinwitness'])),
-          )
-              .map(
-                (bd) => Uint8List.view(
-                  bd.buffer,
-                  bd.offsetInBytes,
-                  bd.lengthInBytes,
-                ),
-              )
-              .toList(),
+          witness:
+              deserStringVector(
+                    ByteData.sublistView(hexToBytes(input['txinwitness'])),
+                  )
+                  .map(
+                    (bd) => Uint8List.view(
+                      bd.buffer,
+                      bd.offsetInBytes,
+                      bd.lengthInBytes,
+                    ),
+                  )
+                  .toList(),
         ),
         prevOutScript: Script.decompile(
           hexToBytes(input["prevout"]["scriptPubKey"]["hex"]),
         ),
-        privkey: input.containsKey('private_key') 
-            ? ECPrivateKey.fromHex(input['private_key']) 
-            : null,
+        privkey:
+            input.containsKey('private_key')
+                ? ECPrivateKey.fromHex(input['private_key'])
+                : null,
       ),
     );
   }
@@ -249,8 +265,8 @@ List<VinInfo> _prepareVinInfoFromInputs(List<dynamic> inputs) {
 }
 
 /// Extract public and private keys from VinInfo objects
-({List<(ECPrivateKey?, bool)> privKeys, List<ECPublicKey> pubKeys}) _extractInputKeysFromVins(
-    List<VinInfo> vins) {
+({List<(ECPrivateKey?, bool)> privKeys, List<ECPublicKey> pubKeys})
+_extractInputKeysFromVins(List<VinInfo> vins) {
   final inputPrivKeys = <(ECPrivateKey?, bool)>[];
   final inputPubKeys = <ECPublicKey>[];
 
@@ -266,8 +282,11 @@ List<VinInfo> _prepareVinInfoFromInputs(List<dynamic> inputs) {
 }
 
 /// Build Silent Payment addresses and label map from owner and labels
-({List<SilentPaymentAddress> addresses, Map<String, String>? labelMap}) _buildAddressesAndLabels(
-    SilentPaymentOwner silentPaymentOwner, List<dynamic> labels) {
+({List<SilentPaymentAddress> addresses, Map<String, String>? labelMap})
+_buildAddressesAndLabels(
+  SilentPaymentOwner silentPaymentOwner,
+  List<dynamic> labels,
+) {
   final addresses = <SilentPaymentAddress>[];
   Map<String, String>? preComputedLabels;
 
