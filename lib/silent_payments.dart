@@ -4,6 +4,5 @@
 library;
 
 export 'src/silent_payments_base.dart';
-export 'src/address.dart';
-export 'src/payment.dart';
+export 'src/bech32m.dart';
 export 'src/utils.dart';

@@ -96,8 +96,8 @@ void main() async {
                   .toList();
 
           final builder = SilentPaymentBuilder(
-            vinOutpoints: outpoints,
-            pubkeys: inputPubKeys,
+            outpoints: outpoints,
+            publicKeys: inputPubKeys,
           );
           final outputMap = builder.createOutputs(
             inputPrivateInfos,
@@ -205,7 +205,7 @@ void main() async {
         }
 
         // Check that the given inputs for the receiving test match what was generated during the sending test
-        final List<SilentPaymentOwner> receivingAddresses = [];
+        final List<SilentPaymentAddress> receivingAddresses = [];
 
         final silentPaymentOwner = SilentPaymentOwner.fromPrivateKeys(
           b_scan: ECPrivateKey.fromHex(given["key_material"]["scan_priv_key"]),
@@ -215,7 +215,7 @@ void main() async {
         );
 
         // Add change address
-        receivingAddresses.add(silentPaymentOwner);
+        receivingAddresses.add(silentPaymentOwner.address);
 
         // G , needed for generating the labels "database"
         final G = ECPublicKey(ECCurve_secp256k1().G.getEncoded());
@@ -223,9 +223,7 @@ void main() async {
         Map<String, String>? preComputedLabels;
 
         for (var label in given['labels']) {
-          receivingAddresses.add(
-            silentPaymentOwner.toLabeledSilentPaymentAddress(label),
-          );
+          receivingAddresses.add(silentPaymentOwner.toLabeledAddress(label));
           final generatedLabel = silentPaymentOwner.generateLabel(label);
 
           preComputedLabels ??= {};
@@ -252,13 +250,12 @@ void main() async {
 
         if (inputPubKeys.isNotEmpty) {
           final spb = SilentPaymentBuilder(
-            pubkeys: inputPubKeys,
-            vinOutpoints: vinOutpoints,
+            outpoints: vinOutpoints,
+            publicKeys: inputPubKeys,
           );
 
           final addToWallet = spb.scanOutputs(
-            silentPaymentOwner.b_scan,
-            silentPaymentOwner.B_spend,
+            silentPaymentOwner,
             outputsToCheck
                 .map((o) => Output.fromScriptBytes(BigInt.zero, o.data))
                 .toList(),

@@ -7,20 +7,67 @@ import 'package:pointycastle/ecc/api.dart' show ECPoint;
 import 'package:pointycastle/ecc/ecc_fp.dart' show ECCurve;
 import 'package:pointycastle/ecc/curves/secp256k1.dart' show ECCurve_secp256k1;
 
+// =====================================================================
+// Utility Extensions and Functions
+// =====================================================================
+
+/// Extension methods for ECPublicKey
+extension ECPublicKeyExtensions on ECPublicKey {
+  /// Create a negated version of this public key (same x, negated y)
+  ECPublicKey negate() {
+    final curve = ECCurve_secp256k1().curve as ECCurve;
+    final point = curve.decodePoint(data)!;
+
+    final x = point.x!.toBigInteger()!;
+    final y = point.y!.toBigInteger()!;
+    final q = curve.q!;
+
+    final negatedY = (q - y) % q;
+    final negatedPoint = curve.createPoint(x, negatedY);
+
+    return ECPublicKey(negatedPoint.getEncoded(true));
+  }
+
+  /// Add this public key to another
+  ECPublicKey add(ECPublicKey other) {
+    final p1 = decodePoint(this);
+    final p2 = decodePoint(other);
+    final sum = (p1 + p2)!;
+
+    if (sum.isInfinity) {
+      throw Exception("addPubkeys: result is point at infinity");
+    }
+
+    return ECPublicKey(sum.getEncoded(true));
+  }
+}
+
+/// Extension methods for ECPrivateKey
+extension ECPrivateKeyExtensions on ECPrivateKey {
+  /// Create a negated version of this private key
+  ECPrivateKey negate() {
+    final n = ECCurve_secp256k1().n;
+    final k = bigIntFromBytes(data);
+    final negated = (n - k) % n;
+    return ECPrivateKey(bigIntToBytes(negated, length: 32));
+  }
+}
+
+/// Simple serialization of a 32-bit integer
 List<int> serUint32(int n) {
   final byteData = ByteData(4);
   byteData.setUint32(0, n, Endian.big);
   return byteData.buffer.asUint8List();
 }
 
-/// Note: This function combines the provided tag with the input data to create a unique
-/// hash by applying a double SHA-256 hash.
+/// Create a tagged hash from data and tag
 Uint8List taggedHash(List<int> data, String tag) {
   final tagDigest = sha256Hash(utf8.encode(tag));
   final concat = Uint8List.fromList([...tagDigest, ...tagDigest, ...data]);
   return sha256Hash(concat);
 }
 
+/// Multiply a private key by a tweak
 Uint8List tweakMulPrivate(Uint8List keyBytes, Uint8List tweakBytes) {
   final n = ECCurve_secp256k1().n;
 
@@ -31,6 +78,7 @@ Uint8List tweakMulPrivate(Uint8List keyBytes, Uint8List tweakBytes) {
   return bigIntToBytes(result, length: 32);
 }
 
+/// Multiply a public key by a tweak
 Uint8List tweakMulPublic(ECPublicKey key, Uint8List tweakBytes) {
   final point = decodePoint(key);
   final tweakInt = bigIntFromBytes(tweakBytes);
@@ -39,6 +87,7 @@ Uint8List tweakMulPublic(ECPublicKey key, Uint8List tweakBytes) {
   return result.getEncoded(true); // compressed
 }
 
+/// Convert a byte array to a BigInt
 BigInt bigIntFromBytes(Uint8List bytes, {Endian endian = Endian.big}) {
   if (endian == Endian.little) {
     bytes = Uint8List.fromList(bytes.reversed.toList());
@@ -51,6 +100,7 @@ BigInt bigIntFromBytes(Uint8List bytes, {Endian endian = Endian.big}) {
   return result;
 }
 
+/// Convert a BigInt to a byte array
 Uint8List bigIntToBytes(
   BigInt val, {
   required int length,
@@ -75,40 +125,8 @@ Uint8List bigIntToBytes(
   return result;
 }
 
+/// Decode a public key into an ECPoint
 ECPoint decodePoint(ECPublicKey pubkey) {
   final curve = ECCurve_secp256k1().curve;
   return curve.decodePoint(pubkey.data)!;
-}
-
-ECPublicKey addPubkeys(ECPublicKey a, ECPublicKey b) {
-  final p1 = decodePoint(a);
-  final p2 = decodePoint(b);
-  final sum = (p1 + p2)!;
-
-  if (sum.isInfinity) {
-    throw Exception("addPubkeys: result is point at infinity");
-  }
-
-  return ECPublicKey(sum.getEncoded(true));
-}
-
-ECPublicKey negatePubkey(ECPublicKey key) {
-  final curve = ECCurve_secp256k1().curve as ECCurve;
-  final point = curve.decodePoint(key.data)!;
-
-  final x = point.x!.toBigInteger()!;
-  final y = point.y!.toBigInteger()!;
-  final q = curve.q!;
-
-  final negatedY = (q - y) % q;
-  final negatedPoint = curve.createPoint(x, negatedY);
-
-  return ECPublicKey(negatedPoint.getEncoded(true));
-}
-
-ECPrivateKey negatePrivkey(ECPrivateKey key) {
-  final n = ECCurve_secp256k1().n;
-  final k = bigIntFromBytes(key.data);
-  final negated = (n - k) % n;
-  return ECPrivateKey(bigIntToBytes(negated, length: 32));
 }
