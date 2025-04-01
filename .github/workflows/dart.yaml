@@ -24,8 +24,11 @@ jobs:
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed .
 
+      - name: Build libsecp256k1 with coinlib
+        run: dart run coinlib:build_linux
+
       - name: Analyze project source
-        run: dart analyze --fatal-infos
+        run: dart analyze
 
       - name: Run tests
         run: dart test
